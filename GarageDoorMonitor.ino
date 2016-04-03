@@ -1,13 +1,15 @@
+//#define _DEBUG_
 #include <SPI.h>
 #include <ESP8266WiFi.h>
 #include <ThingerWifi.h>
 
-#define USERNAME "username"
-#define DEVICE_ID "DevID"
-#define DEVICE_CREDENTIAL "credential"
-#define _DEBUG_ 1
-#define SSID "yourSSID"
-#define SSID_PASSWORD "password"
+#define USERNAME "peterh226"
+#define DEVICE_ID "GDM"
+#define DEVICE_CREDENTIAL "#Po&bYVHc5jX"
+#define SSID "Bulldog_Guest"
+#define SSID_PASSWORD "pirate2018"
+// This script is part of a garage door monitoring system.
+// please see https://github.com/Peterh226/GarageDoorMonitor for details
 
 ThingerWifi thing(USERNAME, DEVICE_ID, DEVICE_CREDENTIAL);
 //External Connections
@@ -17,47 +19,66 @@ unsigned int openPin = D7;
 unsigned int closedPin = D6;
 unsigned int relayPin = D2;
 //Global Variables
-unsigned int closeAfterTime = 300000;
+float closeAfterTime = .083;  //hours
+float msCloseAfterTime = 300000;  //milliseconds
+unsigned int hourToMillisec = 3600000;
 unsigned int oldDoorStatus = 0;
-unsigned int doorStatus = 99;
+unsigned int doorStatus = 9;
 unsigned long doorOpenTime = 0;
 unsigned long doorOpenedTime = millis();
+unsigned int autoCloseEnable = 1; //set to 0 using API Explorer in Thinger.IO
+unsigned int myDoorStatus = 9;
 
-String openText = " Door is open: ";
-String closedText = " Door is closed: ";
-String operatingText = " Door is operating: ";
+const char* openText = " Door is open";
+const char* closedText = " Door is closed";
+const char* operatingText = " Door is operating";
+const char* autoClosedText = "Door Auto closed";
+const char* doorStatusText = "GDM Reboot";
 
 void setup() {
-
+  Serial.begin(115200);
   pinMode(ledOpen, OUTPUT);
   pinMode(ledClosed, OUTPUT);
   pinMode(openPin, INPUT_PULLUP);
   pinMode(closedPin, INPUT_PULLUP);
   pinMode(BUILTIN_LED, OUTPUT);
   pinMode(relayPin, OUTPUT);
-  thing.add_wifi(SSID, SSID_PASSWORD);
-  thing["doorStatus"] >> [](pson & out) {
-    out = doorStatus;
-  };
-  thing.handle();
 
-  Serial.begin(115200);
+  thing.add_wifi(SSID, SSID_PASSWORD);
+
+  thing["doorStatus"] >> [](pson & out) {
+    out["State"] = myDoorStatus;
+    out["DoorText"] = doorStatusText;
+    out["doorOpenTime"] = doorOpenTime;
+  };
+
+  thing["AutoCloseToggle"] << [](pson & in) {
+    autoCloseEnable = in;
+    Serial.print("Auto Close Value: ");
+    Serial.println(autoCloseEnable);
+  };
 }
 
 void loop() {
   Serial.println("******* Loop Start *********");
+  thing.handle();
+  //update autoclose time if new value is provided
+  msCloseAfterTime = closeAfterTime * hourToMillisec;
+  Serial.print("closeAfter - msClose: ");
+  Serial.print(closeAfterTime);
+  Serial.print(" - ");
+  Serial.println(msCloseAfterTime);
 
-  if (doorStatus == 99) {
+  if (doorStatus == 9) {
     Serial.println("Notify of reboot");
     callEndpoints();
-    doorStatus = doorCheck();
   }
-  thing.handle();
+
   //blink heartbeat light to reduce cycles and allow wifi to process
   heartbeatLED();
 
   //Check status of sensors
-  unsigned int myDoorStatus = doorCheck();
+  myDoorStatus = doorCheck();
 
   //Call The endpoints to register if door opened or closed
   //Figure out logic of when and what to send to endpoint
@@ -66,8 +87,10 @@ void loop() {
   //***if old and my doorstatus = 1, then check time and activate if needed
   //Check if door open longer than closeAfterTime
   //***if old = 1 or 2 and myDoorStatus = 3 then call endpoint
-
-
+  Serial.print("OldStatus - Status: ");
+  Serial.print(oldDoorStatus);
+  Serial.print(" - ");
+  Serial.println(myDoorStatus);
   if ((oldDoorStatus == 2 || oldDoorStatus == 3) && myDoorStatus == 1) {//Door has Opened
     doorOpenedTime = 0; //since door just opened, put a zero in the spreadsheet
     callEndpoints();
@@ -75,7 +98,10 @@ void loop() {
   }
   else if (oldDoorStatus == 1 && myDoorStatus == 1) {//Door is open
     doorOpenTime = millis() - doorOpenedTime;
-    if (doorOpenTime > closeAfterTime) {
+    if ((doorOpenTime > msCloseAfterTime) && (autoCloseEnable == 1)) {
+      Serial.println("Auto Energizing Relay");
+      Serial.print("Auto Close Value: ");
+      Serial.println(autoCloseEnable);
       energizeRelay();
     }
   }
@@ -91,7 +117,6 @@ void loop() {
   oldDoorStatus = myDoorStatus;
 }
 
-
 //******************************************************************************************
 // Functions
 
@@ -106,6 +131,7 @@ unsigned doorCheck() {
     digitalWrite(ledOpen, HIGH);
     digitalWrite(ledClosed, HIGH);
     Serial.println(operatingText);
+    doorStatusText = operatingText;
   }
   else if (digitalRead(openPin) == 0) {
     //Door is open
@@ -113,6 +139,7 @@ unsigned doorCheck() {
     digitalWrite(ledOpen, HIGH);
     digitalWrite(ledClosed, LOW);
     Serial.println(openText);
+    doorStatusText = openText;
     Serial.print("doorOpenTime: ");
     Serial.println(doorOpenTime);
   }
@@ -124,40 +151,47 @@ unsigned doorCheck() {
     digitalWrite(ledOpen, LOW);
     digitalWrite(ledClosed, HIGH);
     Serial.println(closedText);
+    doorStatusText = closedText;
   }
 
   else {
     //Both switches failed
-    doorStatus = 9;
+    doorStatus = 8;
     Serial.println("Door is busted");
     digitalWrite(ledOpen, LOW);
     digitalWrite(ledClosed, LOW);
   }
   return doorStatus;
 }
-void gdmInit() {
-  //run once on boot
-}
+
 void heartbeatLED() {
-  //Heartbeat
+  //Heartbeat 5second depay
   //digitalWrite(ledOpen, HIGH);   // turn the LED on (HIGH is the voltage level)
   digitalWrite(BUILTIN_LED, HIGH);
-  delay(1000);              // wait for a second
+  delay(4000);              // wait for a 4 seconds
   //digitalWrite(ledOpen, LOW);    // turn the LED off by making the voltage LOW
   digitalWrite(BUILTIN_LED, LOW);
-  delay(5000);              // wait for a while
+  delay(1000);              // LED On for 1 second out of 5
   return;
 }
 
 void callEndpoints() {
   Serial.println("Calling Endpoint now");
-  //add a row to the change table
-  pson data;
-  data["state"] = doorStatus;
-  data["GDMtime"] = doorOpenTime;
-  thing.call_endpoint("JSON_Testing", data);
-  //thing.call_endpoint("GDM2_Endpoint", data);
-  //thing.call_endpoint("MakerTest1");
+
+  //pson data;
+  Serial.print(doorStatus);
+  Serial.print("---");
+  Serial.println(doorOpenTime);
+  //add a row to the Google Sheet using IFTTT
+  pson txtMsg;
+  txtMsg["value1"] = doorStatusText;
+  txtMsg["value2"] = doorOpenTime;
+  thing.call_endpoint("IFTTT_GDM_Data", txtMsg);
+
+  if (doorStatus == 9) {
+    //Notify that system rebooted or auto-closed
+    thing.call_endpoint("MakerTest1", txtMsg);
+  }
 }
 
 void energizeRelay() {
@@ -169,6 +203,8 @@ void energizeRelay() {
   //notify of autoclose
   unsigned int oldDoorTemp = doorStatus;
   doorStatus = 9;
+  Serial.println("Calling endpoint with auto status");
+  doorStatusText = autoClosedText;
   callEndpoints();
   doorStatus = oldDoorTemp;
   digitalWrite(relayPin, LOW);
