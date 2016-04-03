@@ -3,11 +3,11 @@
 #include <ESP8266WiFi.h>
 #include <ThingerWifi.h>
 
-#define USERNAME "peterh226"
-#define DEVICE_ID "GDM"
-#define DEVICE_CREDENTIAL "#Po&bYVHc5jX"
-#define SSID "Bulldog_Guest"
-#define SSID_PASSWORD "pirate2018"
+#define USERNAME "Uname"
+#define DEVICE_ID "D_ID"
+#define DEVICE_CREDENTIAL "DEVICE ID"
+#define SSID "SSID"
+#define SSID_PASSWORD "Password"
 // This script is part of a garage door monitoring system.
 // please see https://github.com/Peterh226/GarageDoorMonitor for details
 
