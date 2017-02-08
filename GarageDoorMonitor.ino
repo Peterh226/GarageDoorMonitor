@@ -5,9 +5,9 @@
 
 #define USERNAME "peterh226"
 #define DEVICE_ID "GDM"
-#define DEVICE_CREDENTIAL "#Po&bYVHc5jX"
+#define DEVICE_CREDENTIAL "#Po&xxxxxxxx"
 #define SSID "Bulldog_Guest"
-#define SSID_PASSWORD "pirate2018"
+#define SSID_PASSWORD "xxxxxxxxxxxxxx"
 // This script is part of a garage door monitoring system.
 // please see https://github.com/Peterh226/GarageDoorMonitor for details
 
